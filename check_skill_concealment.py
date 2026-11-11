@@ -193,7 +193,7 @@ def main() -> None:
         return
     shown = "; ".join(hits[:4]) + (f" (+{len(hits) - 4} more)" if len(hits) > 4 else "")
     print(json.dumps({
-        "systemMessage": f"Skill '{_show(name)}' asks to hide things from you: {shown}" + (f" {skipped}" if skipped else ""),
+        "systemMessage": f"Skill '{_show(name)}' asks to hide things from you: {shown}" + (f". {skipped}" if skipped else ""),
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
             "additionalContext": (
