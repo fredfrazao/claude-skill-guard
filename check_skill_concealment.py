@@ -185,7 +185,8 @@ def skill_name(payload: dict) -> tuple[str, str]:
         command = str(payload.get("command_name") or "").strip()  # e.g. "datadog:ddconfig"
         prompt = str(payload.get("prompt") or "").strip()
         typed = prompt.split()[0][1:] if prompt.startswith("/") else ""
-        return (command or typed).strip(), event
+        qualified = [n for n in (command, typed) if ":" in n]  # "plugin:skill" from either source
+        return (qualified[0] if qualified else command or typed).strip(), event
     return str((payload.get("tool_input") or {}).get("skill") or "").strip(), event
 
 
