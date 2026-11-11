@@ -182,9 +182,10 @@ def skill_name(payload: dict) -> tuple[str, str]:
     if event == "UserPromptExpansion":
         if payload.get("expansion_type", "slash_command") != "slash_command":
             return "", event
+        command = str(payload.get("command_name") or "").strip()  # e.g. "datadog:ddconfig"
         prompt = str(payload.get("prompt") or "").strip()
-        typed = prompt.split()[0][1:] if prompt.startswith("/") else ""  # keeps the plugin: prefix
-        return (typed or str(payload.get("command_name") or "")).strip(), event
+        typed = prompt.split()[0][1:] if prompt.startswith("/") else ""
+        return (command or typed).strip(), event
     return str((payload.get("tool_input") or {}).get("skill") or "").strip(), event
 
 
