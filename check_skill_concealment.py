@@ -27,22 +27,33 @@ HOME = pathlib.Path.home()
 CLAUDE = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or HOME / ".claude")
 
 _WHO = r"(?:the\s+)?(?:users?|human|operator)\b(?!['\u2019]s)|them\b"
-_SILENT_VERBS = (r"read|run|check|call|send|write|install|execute|fetch|modify|delete|remove|upload|"
-                 r"copy|post|ignore|skip|suppress|drop|collect|log")
-PHRASES = re.compile(
-    rf"\b(?:do\s+not|don['\u2019]?t|never|no\s+need\s+to)\s+(?:tell|inform|mention|reveal|show|notify|disclose|report)"
-    rf"\b(?:\s+(?:this|it|that|anything))?(?:\s+to)?\s+(?:{_WHO})"
-    rf"|\b(?:do\s+not|don['\u2019]?t|never)\s+let\s+(?:{_WHO})\s+know\b"
-    rf"|\bwithout\s+(?:telling|informing|asking|notifying)\s+(?:{_WHO})"
-    rf"|\bwithout\s+the\s+users?['\u2019]?s?\s+(?:knowing|knowledge)\b"
-    rf"|\bkeep\s+(?:this|it|that)\s+from\s+(?:{_WHO})"
-    rf"|\bhide\s+(?:this|it|that|the\s+\w+)\s+from\s+(?:{_WHO})"
-    rf"|\b(?:silently|quietly|secretly)\s+(?:{_SILENT_VERBS})\b",
-    re.IGNORECASE,
-)
+# Verbs that are normal in code comments ("silently ignore unknown keys") count only in prose files.
+_SILENT_ACTIONS = r"read|run|check|call|send|write|install|execute|fetch|modify|delete|remove|upload|copy|post|collect"
+_SILENT_PROSE_ONLY = r"ignore|skip|suppress|drop|log"
+
+
+def _phrases(silent_verbs: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"\b(?:do\s+not|don['\u2019]?t|never|no\s+need\s+to)\s+(?:tell|inform|mention|reveal|show|notify|disclose|report)"
+        rf"\b(?:\s+(?:this|it|that|anything))?(?:\s+to)?\s+(?:{_WHO})(?!\s+to\s)"  # "tell the user to X" is advice
+        rf"|\b(?:do\s+not|don['\u2019]?t|never)\s+let\s+(?:{_WHO})\s+know\b"
+        rf"|\bwithout\s+(?:telling|informing|asking|notifying)\s+(?:{_WHO})"
+        rf"|\bwithout\s+the\s+users?['\u2019]?s?\s+(?:knowing|knowledge)\b"
+        rf"|\bkeep\s+(?:this|it|that)\s+from\s+(?:{_WHO})"
+        rf"|\bhide\s+(?:this|it|that|the\s+\w+)\s+from\s+(?:{_WHO})"
+        rf"|\b(?:silently|quietly|secretly)\s+(?:{silent_verbs})\b",
+        re.IGNORECASE,
+    )
+
+
+PHRASES = _phrases(f"{_SILENT_ACTIONS}|{_SILENT_PROSE_ONLY}")
+PHRASES_CODE = _phrases(_SILENT_ACTIONS)
+# "do not silently skip" asks for the opposite of hiding.
+_NEGATED = re.compile(r"\b(?:not|never|no)\s+$|n['\u2019]t\s+$", re.IGNORECASE)
 # Invisible characters and markdown emphasis that would split a phrase.
 _NOISE = re.compile("[\u200b-\u200f\u2060\ufeff]|[*_`]")
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+CODE_SUFFIXES = {".py", ".sh", ".bash", ".js", ".ts", ".json", ".yaml", ".yml", ".toml"}
 TEXT_SUFFIXES = {"", ".md", ".mdx", ".markdown", ".txt", ".rst", ".py", ".sh", ".bash", ".js", ".ts",
                  ".json", ".yaml", ".yml", ".toml", ".html"}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
@@ -86,8 +97,8 @@ def skill_dirs(name: str) -> list[pathlib.Path]:
             bases.append(pathlib.Path(project) / ".claude" / "skills")
     found = []
     for base in bases:
-        direct = base / skill
-        if direct.is_dir() and _inside(direct, base):
+        direct = base / skill  # the name is validated, so this stays in base even if it is a symlink
+        if direct.is_dir():
             found.append(direct)
             continue
         for md in base.glob("*/SKILL.md"):
@@ -99,10 +110,18 @@ def skill_dirs(name: str) -> list[pathlib.Path]:
 def _files(directory: pathlib.Path):
     """Text files of the skill. Symlinks are followed only when they stay inside the skill (or its plugin);
     a symlink that leaves it is reported instead of being read."""
-    root = directory.parent.parent if directory.parent.name == "skills" else directory
-    stack = [directory]
+    in_plugin = _inside(directory, CLAUDE / "plugins" / "cache") and directory.parent.name == "skills"
+    root = directory.parent.parent if in_plugin else directory  # a plugin's skills may share its files
+    stack, seen = [directory], set()
     while stack:
         current = stack.pop()
+        try:
+            key = current.resolve()
+        except OSError:
+            continue
+        if key in seen:  # symlink loops
+            continue
+        seen.add(key)
         try:
             entries = sorted(current.iterdir())
         except OSError:
@@ -119,17 +138,17 @@ def _files(directory: pathlib.Path):
                 yield entry, "file"
 
 
-def scan(directory: pathlib.Path) -> list[str]:
-    """'file:line "phrase"' for every concealment phrase in the skill's files."""
-    hits, count, total = [], 0, 0
+def scan(directory: pathlib.Path) -> tuple[list[str], list[str]]:
+    """('file:line "phrase"' hits, notes about what could not be scanned)."""
+    hits, notes, count, total = [], [], 0, 0
     for f, kind in _files(directory):
         rel = _show(str(f.relative_to(directory)))
         if kind == "leaves":
-            hits.append(f'{rel} "symlink leaves the skill, not scanned"')
+            notes.append(f"{rel} (symlink out of the skill)")
             continue
         count += 1
         if count > MAX_FILES or total > MAX_TOTAL_BYTES:
-            hits.append(f'(stopped after {count - 1} files, {total:,} bytes)')
+            notes.append(f"files after the first {count - 1} ({total:,} bytes)")
             break
         try:
             with f.open("rb") as fh:
@@ -140,10 +159,13 @@ def scan(directory: pathlib.Path) -> list[str]:
         text = _NOISE.sub("", raw.decode("utf-8", errors="ignore"))
         starts = [0] + [i + 1 for i, c in enumerate(text) if c == "\n"]
         flat = re.sub(r"\s", " ", text)  # same length: a phrase split over lines still matches
-        for m in PHRASES.finditer(flat):
+        pattern = PHRASES_CODE if f.suffix.lower() in CODE_SUFFIXES else PHRASES
+        for m in pattern.finditer(flat):
+            if m.group(0)[:1].lower() in "sq" and _NEGATED.search(flat[max(0, m.start() - 12): m.start()]):
+                continue
             line = bisect.bisect_right(starts, m.start())
             hits.append(f'{rel}:{line} "{" ".join(m.group(0).split())}"')
-    return hits
+    return hits, notes
 
 
 def _show(text: str, limit: int = 80) -> str:
@@ -157,12 +179,21 @@ def main() -> None:
     name = str((payload.get("tool_input") or {}).get("skill") or "").strip()
     if not name:
         return
-    hits = [h for d in skill_dirs(name) for h in scan(d)]
+    hits: list[str] = []
+    notes: list[str] = []
+    for d in skill_dirs(name):
+        h, n = scan(d)
+        hits += h
+        notes += n
+    if not hits and not notes:
+        return
+    skipped = ("Not scanned: " + "; ".join(notes[:3]) + ".") if notes else ""
     if not hits:
+        print(json.dumps({"systemMessage": f"Skill '{_show(name)}': {skipped}"}, ensure_ascii=False))
         return
     shown = "; ".join(hits[:4]) + (f" (+{len(hits) - 4} more)" if len(hits) > 4 else "")
     print(json.dumps({
-        "systemMessage": f"Skill '{_show(name)}' asks to hide things from you: {shown}",
+        "systemMessage": f"Skill '{_show(name)}' asks to hide things from you: {shown}" + (f" {skipped}" if skipped else ""),
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
             "additionalContext": (
