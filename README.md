@@ -13,7 +13,9 @@ Every time Claude loads a skill, the hook:
    - synced skills;
    - installed plugins in `~/.claude/plugins/cache`;
    - the project's `.claude/skills`;
-2. scans `SKILL.md` and the skill's other text files for concealment phrases;
+2. scans the skill's text files for concealment phrases:
+   - `SKILL.md`, references and docs (`.md`, `.txt`, `.rst`…);
+   - scripts and config (`.py`, `.sh`, `.js`, `.json`, `.yaml`…);
 3. if it finds one, shows you a warning with the file, line and phrase, and tells Claude that those instructions do not apply.
 
 Example warning:
@@ -26,24 +28,27 @@ It stays quiet when the skill is clean.
 
 ## What it looks for
 
-- `do not` / `don't` / `never` + `tell` / `inform` / `mention` / `reveal` / `show` / `notify` + `the user`
-- `without telling` / `informing` / `asking` / `notifying the user`
-- `silently` / `quietly` / `secretly` + an action (`read`, `run`, `check`, `send`, `install`, `fetch`…)
-- `hide this` / `it` / `the …` `from the user`
+- `do not` / `don't` / `never` / `no need to` + `tell` / `mention` / `reveal` / `disclose`… + `the user` / `them`
+- `do not let the user know`, `without telling the user`, `without the user knowing`
+- `keep this from the user`, `hide the … from the user`
+- `silently` / `quietly` / `secretly` + an action (`read`, `run`, `send`, `install`, `delete`, `drop`…)
+
+Phrases split over two lines, wrapped in markdown emphasis or broken by invisible characters are still found. Protective wording such as "never show the user's password" is not flagged.
 
 ## Install
 
 Requirements: Claude Code and Python 3.10 or newer. Nothing else.
 
-1. Copy the script:
+1. Copy the script from a release tag (not `main`), and check it against the SHA-256 in the release notes:
 
    ```bash
    mkdir -p ~/.claude/hooks
    curl -fsSL -o ~/.claude/hooks/check_skill_concealment.py \
-     https://raw.githubusercontent.com/fredfrazao/claude-skill-guard/main/check_skill_concealment.py
+     https://raw.githubusercontent.com/fredfrazao/claude-skill-guard/v1.0.0/check_skill_concealment.py
+   shasum -a 256 ~/.claude/hooks/check_skill_concealment.py
    ```
 
-   Read it before you use it: it is about 100 lines.
+   Read it before you use it: it is about 170 lines of standard-library Python.
 
 2. Add the hook to `~/.claude/settings.json`, merging with any `hooks` you already have:
 
@@ -84,14 +89,18 @@ and what was found.
 
 ## Safety
 
-- It only reads the skill's own local files and makes no network calls.
+- It only reads the skill's own local files and makes no network calls. Nothing is executed.
 - It never blocks a tool call. On any error it exits silently, so it cannot break a session.
-- Skill names are checked before they are used in a path, so a crafted name cannot reach other folders.
+- Skill names are checked before they are used in a path (no `.`, `..` or separators), so a crafted name cannot reach other folders.
+- A symlink inside the skill is followed only if it stays inside the skill or its plugin. One that points elsewhere is reported, not read.
+- Scanning is bounded: the first 1 MB of each file, at most 500 files and 10 MB per skill. File names in the warning are cleaned of control characters.
 
 ## Limits
 
-- It is a phrase match, not a semantic check. A skill can hide intent in other words, and a harmless line can trip it.
+- It is an English phrase match, not a semantic check. A skill can hide intent in other words, and a harmless line can trip it.
 - It runs after the skill is loaded. It warns you and Claude; it does not stop the skill.
+- For a plugin it scans the newest installed version only.
+- Not covered: legacy `.claude/commands`, managed skills, skills added with `--add-dir` or `--plugin-dir`, and custom skill paths in `plugin.json`.
 
 ## Development
 
