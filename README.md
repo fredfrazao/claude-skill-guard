@@ -6,7 +6,12 @@ Skills from plugins and marketplaces can include lines like "do not tell the use
 
 ## What it does
 
-Every time Claude loads a skill, the hook:
+A skill can load in two ways, and the hook covers both:
+
+- Claude loads it with the Skill tool (`PostToolUse` event);
+- you type `/skill` or `/plugin:skill` yourself (`UserPromptExpansion` event).
+
+Each time, the hook:
 
 1. finds that skill's folder:
    - your own skills in `~/.claude/skills`;
@@ -44,13 +49,13 @@ Requirements: Claude Code and Python 3.10 or newer. Nothing else.
    ```bash
    mkdir -p ~/.claude/hooks
    curl -fsSL -o ~/.claude/hooks/check_skill_concealment.py \
-     https://raw.githubusercontent.com/fredfrazao/claude-skill-guard/v1.0.0/check_skill_concealment.py
+     https://raw.githubusercontent.com/fredfrazao/claude-skill-guard/v1.1.0/check_skill_concealment.py
    shasum -a 256 ~/.claude/hooks/check_skill_concealment.py
    ```
 
-   Read it before you use it: it is about 170 lines of standard-library Python.
+   Read it before you use it: it is about 230 lines of standard-library Python.
 
-2. Add the hook to `~/.claude/settings.json`, merging with any `hooks` you already have:
+2. Add both hook entries to `~/.claude/settings.json`, merging with any `hooks` you already have:
 
    ```json
    {
@@ -62,10 +67,19 @@ Requirements: Claude Code and Python 3.10 or newer. Nothing else.
              { "type": "command", "command": "python3 ~/.claude/hooks/check_skill_concealment.py", "timeout": 10 }
            ]
          }
+       ],
+       "UserPromptExpansion": [
+         {
+           "hooks": [
+             { "type": "command", "command": "python3 ~/.claude/hooks/check_skill_concealment.py", "timeout": 10 }
+           ]
+         }
        ]
      }
    }
    ```
+
+   Without the `UserPromptExpansion` entry, skills you start yourself with `/` are not checked.
 
 3. Restart Claude Code, or open `/hooks` once so it reloads the settings.
 
@@ -73,6 +87,8 @@ Requirements: Claude Code and Python 3.10 or newer. Nothing else.
 
 ```bash
 echo '{"tool_input": {"skill": "<plugin>:<skill>"}}' | python3 ~/.claude/hooks/check_skill_concealment.py
+echo '{"hook_event_name": "UserPromptExpansion", "expansion_type": "slash_command", "prompt": "/<plugin>:<skill>"}' \
+  | python3 ~/.claude/hooks/check_skill_concealment.py
 ```
 
 A skill with concealment phrases prints a JSON warning. A clean skill prints nothing.
