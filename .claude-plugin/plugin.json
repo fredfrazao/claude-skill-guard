@@ -1,0 +1,14 @@
+{
+  "name": "skill-guard",
+  "displayName": "Skill Guard",
+  "version": "1.2.0",
+  "description": "Warns you when a Claude Code skill tells Claude to hide something from you.",
+  "author": {
+    "name": "Frederico Frazão",
+    "url": "https://github.com/fredfrazao"
+  },
+  "homepage": "https://github.com/fredfrazao/claude-skill-guard",
+  "repository": "https://github.com/fredfrazao/claude-skill-guard",
+  "license": "MIT",
+  "keywords": ["security", "hooks", "skills", "plugins", "transparency"]
+}

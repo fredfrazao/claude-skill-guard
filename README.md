@@ -44,12 +44,29 @@ Phrases split over two lines, wrapped in markdown emphasis or broken by invisibl
 
 Requirements: Claude Code and Python 3.10 or newer. Nothing else.
 
+Pick one of the two ways below, not both, or every warning shows up twice.
+
+### As a plugin (recommended)
+
+In Claude Code, add this repo as a marketplace pinned to a release tag, then install the plugin:
+
+```
+/plugin marketplace add fredfrazao/claude-skill-guard#v1.2.0
+/plugin install skill-guard@fredfrazao
+```
+
+The plugin registers both hook entries for you. Restart Claude Code so the hooks load.
+
+To update, remove the marketplace (`/plugin marketplace remove fredfrazao`) and add it again with the newer tag.
+
+### By hand
+
 1. Copy the script from a release tag (not `main`), and check it against the SHA-256 in the release notes:
 
    ```bash
    mkdir -p ~/.claude/hooks
    curl -fsSL -o ~/.claude/hooks/check_skill_concealment.py \
-     https://raw.githubusercontent.com/fredfrazao/claude-skill-guard/v1.1.0/check_skill_concealment.py
+     https://raw.githubusercontent.com/fredfrazao/claude-skill-guard/v1.2.0/check_skill_concealment.py
    shasum -a 256 ~/.claude/hooks/check_skill_concealment.py
    ```
 

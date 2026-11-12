@@ -1,0 +1,16 @@
+{
+  "name": "fredfrazao",
+  "description": "Claude Code plugins by Frederico Frazão.",
+  "owner": {
+    "name": "Frederico Frazão",
+    "url": "https://github.com/fredfrazao"
+  },
+  "plugins": [
+    {
+      "name": "skill-guard",
+      "source": "./",
+      "description": "Warns you when a Claude Code skill tells Claude to hide something from you.",
+      "category": "security"
+    }
+  ]
+}
