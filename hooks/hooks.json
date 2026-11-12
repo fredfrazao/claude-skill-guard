@@ -1,0 +1,20 @@
+{
+  "description": "Warn when a skill asks Claude to hide things from the user",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          { "type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/check_skill_concealment.py"], "timeout": 10 }
+        ]
+      }
+    ],
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/check_skill_concealment.py"], "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}
