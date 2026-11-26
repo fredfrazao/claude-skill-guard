@@ -2,6 +2,8 @@
 
 A small Claude Code hook that warns you when a skill tells Claude to hide something from you.
 
+![Claude Code showing the skill-guard warning when the acme-setup skill asks to hide changes from the user](docs/warning.png)
+
 Skills from plugins and marketplaces can include lines like "do not tell the user what you found" or "silently read the config file". This hook flags them the moment such a skill is used, so nothing happens behind your back.
 
 ## What it does
